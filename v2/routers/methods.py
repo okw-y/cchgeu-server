@@ -2,14 +2,14 @@ import json
 import logging
 import time
 
-from v2.models import Schedules, LastUpdate, Faculties, FACULTIES
+from v2.models import Schedules, LastUpdateModel, FacultiesModel, FACULTIES, ScheduleModel
 from v2.parser import parse_sheet
 from v2.parser.groups import get_groups
 
 from peewee import DoesNotExist
 
 
-def update_groups() -> None:
+def update_groups(force_update: bool = False) -> None:
     start = time.time()
     for url in FACULTIES:
         try:
@@ -20,32 +20,39 @@ def update_groups() -> None:
             )
             continue
 
-        row, _ = Faculties.get_or_create(name=faculty_name, defaults={"data": "[]"})
+        row, _ = FacultiesModel.get_or_create(name=faculty_name, defaults={"data": "[]"})
         row.data = json.dumps(
             [group["group"] for group in groups], ensure_ascii=False
         )
 
         for group in groups:
             try:
-                row = LastUpdate.get(
-                    LastUpdate.name == group["group"]
+                row = LastUpdateModel.get(
+                    LastUpdateModel.name == group["group"]
                 )
 
                 last_update = [row.date, row.time]
             except DoesNotExist:
                 last_update = []
 
-            if group["last_update"] != last_update:
+            if (group["last_update"] != last_update) or force_update:
                 try:
-                    parsed = parse_sheet(group["file"], group["group"])
+                    #parsed = parse_sheet(group["file"], group["group"])
+                    #
+                    # row, _ = Schedules.get_or_create(name=group["group"], defaults={"data": "[]", "is_group": True})
+                    # row.data = json.dumps(
+                    #     [lesson.model_dump() for lesson in parsed], ensure_ascii=False
+                    # )
+                    # row.save()
 
-                    row, _ = Schedules.get_or_create(name=group["group"], defaults={"data": "[]", "is_group": True})
-                    row.data = json.dumps(
-                        [lesson.model_dump() for lesson in parsed], ensure_ascii=False
-                    )
-                    row.save()
+                    ScheduleModel.delete().where(
+                        ScheduleModel.group == group["group"]
+                    ).execute()
 
-                    row, _ = LastUpdate.get_or_create(name=group["group"], defaults={"date": "", "time": ""})
+                    for obj in parse_sheet(group["file"], group["group"]):
+                        ScheduleModel.create(**obj.model_dump())
+
+                    row, _ = LastUpdateModel.get_or_create(name=group["group"], defaults={"date": "", "time": ""})
                     row.date = group["last_update"][0]
                     row.time = group["last_update"][1]
                     row.save()
@@ -60,7 +67,7 @@ def update_groups() -> None:
         f"Groups update completed in {time.time() - start}s."
     )
 
-    update_teachers()
+    # update_teachers()
 
 
 

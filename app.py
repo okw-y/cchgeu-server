@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from typing import AsyncGenerator
 
 from v2.middlewares import StatisticsMiddleware
-from v2.routers import update_groups, v1router, v2router
+from v2.routers import update_groups, v1router, v2router, dashboard
 
 
 urllib3.disable_warnings(
@@ -22,7 +22,7 @@ scheduler = AsyncIOScheduler()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator:
-    await asyncio.to_thread(update_groups)
+    # await asyncio.to_thread(update_groups, True)
 
     scheduler.add_job(
         update_groups, IntervalTrigger(hours=6), id="update"
@@ -32,7 +32,12 @@ async def lifespan(_: FastAPI) -> AsyncGenerator:
     yield
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None
+)
 app.add_middleware(
     ApitallyMiddleware,
 
@@ -49,3 +54,4 @@ app.add_middleware(StatisticsMiddleware)
 
 app.include_router(v1router)
 app.include_router(v2router)
+app.include_router(dashboard)

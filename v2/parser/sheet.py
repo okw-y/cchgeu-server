@@ -82,7 +82,7 @@ def parse_sheet(path: str, group: str) -> list[Lesson]:
                             name=split_name,
                             audience=split_audience,
                             group=group,
-                            subgroup=-1,
+                            subgroup=number + 1,
                             wktp=split_wktp
                         )
                     )

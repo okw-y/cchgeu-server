@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Dashboard (Standalone Demo)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    <style>
+        :root {
+            --bg-color: #000000; --surface-color: #111111; --border-color: #222222;
+            --accent-color: #1DB954; --text-primary: #e0e0e0; --text-secondary: #9e9e9e;
+            --font-family: 'Roboto Mono', monospace; --border-radius: 12px;
+            --success: #4caf50; --warning: #ff9800; --error: #f44336;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font-family); background-color: var(--bg-color); color: var(--text-primary); font-size: 14px; }
+        .container { max-width: 1800px; margin: 0 auto; padding: 24px; }
+
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+        .logo-section { display: flex; align-items: center; gap: 12px; }
+        .logo-icon { color: var(--accent-color); }
+        h1 { font-weight: 500; font-size: 1.5rem; letter-spacing: -0.5px; }
+        .controls-section { display: flex; align-items: center; gap: 16px; }
+
+        .control-button { background: none; border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 6px; padding: 8px; cursor: pointer; display: flex; align-items: center; transition: all 0.2s; }
+        .control-button:hover { background: var(--surface-color); color: var(--text-primary); }
+
+        .time-filter { display: flex; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px; }
+        .time-filter button { background: transparent; border: none; color: var(--text-secondary); padding: 6px 16px; font-family: var(--font-family); font-size: 0.9rem; cursor: pointer; border-radius: 4px; transition: all 0.2s; }
+        .time-filter button.active { background: var(--accent-color); color: #000; font-weight: 500; }
+
+        .main-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 24px; }
+        .card { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 20px; display: flex; flex-direction: column; }
+        .card-header { color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 1px; }
+        .card-header .material-symbols-outlined { font-size: 18px; color: var(--accent-color); }
+        .summary-value { font-size: 2.2rem; font-weight: 700; margin-top: auto; }
+        .val-accent { color: var(--accent-color); }
+        .chart-h-300 { height: 300px; position: relative; } .chart-h-200 { height: 200px; position: relative; }
+        .col-4 { grid-column: span 4; } .col-12 { grid-column: span 12; }
+        .table-wrapper { overflow-x: auto; max-height: 400px; } table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border-color); }
+        tbody tr { transition: background 0.2s; cursor: pointer; } tbody tr:hover { background: rgba(29, 185, 84, 0.05); }
+        .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 700; }
+        .badge-2xx { color: var(--success); background: rgba(76, 175, 80, 0.1); } .badge-4xx { color: var(--warning); background: rgba(255, 152, 0, 0.1); }
+        .badge-5xx { color: var(--error); background: rgba(244, 67, 54, 0.1); }
+
+        /* MODAL (AD SETTINGS) */
+        .modal { display: none; position: fixed; z-index: 999; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); backdrop-filter: blur(5px); }
+        .modal-content { background: var(--bg-color); border: 1px solid var(--border-color); margin: 15% auto; padding: 24px; width: 90%; max-width: 500px; border-radius: var(--border-radius); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .modal-header h2 { font-weight: 500; }
+        .close-button { color: var(--text-secondary); font-size: 28px; cursor: pointer; }
+        .modal-body .form-group { margin-bottom: 16px; }
+        .modal-body label { display: block; margin-bottom: 8px; color: var(--text-secondary); }
+        .modal-body input[type="text"] { background: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary); padding: 10px; border-radius: 6px; width: 100%; font-family: var(--font-family); }
+        .modal-body .toggle-group { display: flex; justify-content: space-between; align-items: center; }
+        .modal-footer { margin-top: 24px; display: flex; justify-content: space-between; gap: 16px; }
+        .btn { background: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary); padding: 10px 16px; border-radius: 6px; cursor: pointer; font-family: var(--font-family); font-weight: 500; transition: all 0.2s; }
+        .btn:hover { border-color: var(--accent-color); }
+        .btn-primary { background: var(--accent-color); color: #000; border-color: var(--accent-color); }
+        .btn-danger { color: var(--error); } .btn-danger:hover { border-color: var(--error); }
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent-color); }
+        input:checked + .slider:before { transform: translateX(20px); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <div class="logo-section"><span class="material-symbols-outlined logo-icon" style="font-size: 32px;">terminal</span><h1>CCHGEU-SCHEDULE (by okw.y)</h1></div>
+        <div class="controls-section">
+            <button id="ad-settings-btn" class="control-button" title="Ad Settings"><span class="material-symbols-outlined">toggle_on</span></button>
+            <div class="time-filter" id="time-filter">
+                <button class="active" data-period="day">1D</button><button data-period="week">7D</button><button data-period="month">30D</button><button data-period="all">ALL</button>
+            </div>
+        </div>
+    </div>
+    <div class="main-grid">
+        <div class="card col-4"><div class="card-header"><span class="material-symbols-outlined">query_stats</span>Total Requests</div><div class="summary-value val-accent" id="kpi-total">0</div></div>
+        <div class="card col-4"><div class="card-header"><span class="material-symbols-outlined">timer</span>Avg Latency</div><div class="summary-value" id="kpi-avg">0<span style="font-size: 0.5em; color: var(--text-secondary);">ms</span></div></div>
+        <div class="card col-4"><div class="card-header"><span class="material-symbols-outlined">warning</span>Error Rate</div><div class="summary-value" style="color: var(--error);" id="kpi-errors">0%</div></div>
+        <div class="card col-12"><div class="card-header"><span class="material-symbols-outlined">timeline</span>Traffic Timeline</div><div class="chart-h-300"><canvas id="mainChart"></canvas></div></div>
+        <div class="card col-4"><div class="card-header"><span class="material-symbols-outlined">pie_chart</span>Status Codes</div><div class="chart-h-200"><canvas id="statusChart"></canvas></div></div>
+        <div class="card col-4"><div class="card-header"><span class="material-symbols-outlined">school</span>Faculties</div><div class="chart-h-200"><canvas id="facultiesChart"></canvas></div></div>
+        <div class="card col-4"><div class="card-header"><span class="material-symbols-outlined">group</span>Groups</div><div class="chart-h-200"><canvas id="groupsChart"></canvas></div></div>
+        <div class="card col-12"><div class="card-header"><span class="material-symbols-outlined">list</span>Live Request Log</div><div class="table-wrapper"><table id="log-table"><thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>Latency</th></tr></thead><tbody></tbody></table></div></div>
+    </div>
+</div>
+
+<!-- AD SETTINGS MODAL -->
+<div id="ad-settings-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Ad Settings</h2>
+            <span class="close-button">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="client-id-input">Individual Client ID</label>
+                <input type="text" id="client-id-input" placeholder="Enter Client ID or * for all">
+            </div>
+            <div class="form-group toggle-group">
+                <label for="ad-modal-toggle">Enable Ads</label>
+                <label class="switch">
+                    <input type="checkbox" id="ad-modal-toggle" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-danger" id="mass-disable-btn">Disable For All (*)</button>
+            <button class="btn btn-primary" id="apply-ad-settings-btn">Apply</button>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    // --- CONFIG, STATE & CHART DEFAULTS ---
+    const COLORS = { accent: '#1DB954', textPrimary: '#e0e0e0', textSecondary: '#9e9e9e', border: '#222222', success: '#4caf50', warning: '#ff9800', error: '#f44336', mutedPalette: ['#1DB954', '#2E7D32', '#00695C', '#43A047', '#607D8B'] };
+    let mainChart, statusChart, facultiesChart, groupsChart;
+    let currentPeriod = 'day';
+    Chart.defaults.color = COLORS.textSecondary; Chart.defaults.borderColor = COLORS.border;
+    Chart.defaults.font.family = "'Roboto Mono', monospace"; Chart.defaults.font.size = 11;
+    Chart.defaults.plugins.legend.labels.color = COLORS.textPrimary; Chart.defaults.plugins.legend.labels.usePointStyle = true;
+
+    // --- INIT ---
+    document.addEventListener('DOMContentLoaded', () => {
+        initAllCharts();
+        setupInteractions();
+        loadData(currentPeriod);
+    });
+
+    // --- CHART INITIALIZATION ---
+    function initAllCharts() {
+        const mainCtx = document.getElementById('mainChart').getContext('2d');
+        const gradient = mainCtx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(29, 185, 84, 0.25)'); gradient.addColorStop(1, 'rgba(29, 185, 84, 0)');
+        mainChart = new Chart(mainCtx, { type: 'line', data: { datasets: [{ label: 'Requests', borderColor: COLORS.accent, backgroundColor: gradient, borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' }, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: COLORS.border } } } } });
+        statusChart = initDoughnut('statusChart');
+        facultiesChart = initDoughnut('facultiesChart');
+        groupsChart = initDoughnut('groupsChart');
+    }
+
+    function initDoughnut(canvasId) {
+        return new Chart(document.getElementById(canvasId).getContext('2d'), { type: 'doughnut', data: { datasets: [{ borderWidth: 0, backgroundColor: COLORS.mutedPalette }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'right', labels: { boxWidth: 12, padding: 15, color: COLORS.textPrimary } } } } });
+    }
+
+    // --- DATA LOADING & RENDERING ---
+    async function loadData(period) {
+        try {
+            const response = await fetch(`/dashboard-data?period=${period}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+
+            renderData(data);
+        } catch (e) { console.error("Data load failed:", e); }
+    }
+
+    function renderData(data) {
+        document.getElementById('kpi-total').textContent = data.summary.total;
+        document.getElementById('kpi-avg').innerHTML = `${data.summary.avg_latency}<span style="font-size:0.5em;color:var(--text-secondary)">ms</span>`;
+        document.getElementById('kpi-errors').textContent = data.summary.error_rate + '%';
+        updateChart(mainChart, data.timeline.labels, data.timeline.data);
+        updateChart(statusChart, Object.keys(data.status_dist), Object.values(data.status_dist), [COLORS.success, COLORS.warning, COLORS.error]);
+        updateChart(facultiesChart, Object.keys(data.faculties), Object.values(data.faculties));
+        updateChart(groupsChart, Object.keys(data.groups), Object.values(data.groups));
+        renderTable(data.logs);
+    }
+
+    function updateChart(chart, labels, data, customColors = null) {
+        chart.data.labels = labels; chart.data.datasets[0].data = data;
+        if (customColors) chart.data.datasets[0].backgroundColor = customColors;
+        chart.update();
+    }
+
+    function renderTable(logs) {
+        const tbody = document.querySelector('#log-table tbody');
+        tbody.innerHTML = logs.map(log => `<tr data-id="${log.id}"><td>${log.time}</td><td>${log.method}</td><td>${log.path}</td><td><span class="badge ${log.status >= 500 ? 'badge-5xx' : (log.status >= 400 ? 'badge-4xx' : 'badge-2xx')}">${log.status}</span></td><td>${log.latency}ms</td></tr>`).join('');
+    }
+
+    // --- INTERACTIONS & MODAL LOGIC ---
+    function setupInteractions() {
+        document.getElementById('time-filter').addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON' && !e.target.classList.contains('active')) {
+                document.querySelector('#time-filter button.active').classList.remove('active');
+                e.target.classList.add('active');
+                currentPeriod = e.target.dataset.period;
+                loadData(currentPeriod);
+            }
+        });
+
+        // AD SETTINGS MODAL
+        const modal = document.getElementById('ad-settings-modal');
+        document.getElementById('ad-settings-btn').onclick = () => { modal.style.display = 'block'; }
+        document.querySelector('.close-button').onclick = () => { modal.style.display = 'none'; }
+
+        document.getElementById('apply-ad-settings-btn').onclick = () => {
+            const clientId = document.getElementById('client-id-input').value;
+            const enabled = document.getElementById('ad-modal-toggle').checked;
+            if (!clientId) { alert('Client ID is required!'); return; }
+            toggleAdsAPI(clientId, enabled);
+        };
+
+        document.getElementById('mass-disable-btn').onclick = () => {
+            if (confirm('Are you sure you want to disable ads for ALL clients?')) {
+                toggleAdsAPI('*', false);
+            }
+        };
+
+        window.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; }
+    }
+
+    async function toggleAdsAPI(clientId, enabled) {
+        console.log(`Sending ad toggle request: client_id=${clientId}, enabled=${enabled}`);
+        alert(`Setting ads for client '${clientId}' to '${enabled}'`);
+
+        try {
+            const response = await fetch('/v2/toggleAds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ client_id: clientId, enabled: enabled })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'API Error');
+            alert(`Success: ${result.message || `Ads for ${result.client_id} set to ${result.ads_enabled}`}`);
+            document.getElementById('ad-settings-modal').style.display = 'none';
+        } catch (error) {
+            alert(`Error: ${error.message}`);
+        }
+    }
+</script>
+</body>
+</html>

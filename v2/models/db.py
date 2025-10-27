@@ -1,4 +1,6 @@
-from peewee import SqliteDatabase, Model, CharField, TextField, BooleanField
+from .fields import IntegerListField
+
+from peewee import SqliteDatabase, Model, IntegerField, CharField, TextField, BooleanField
 
 
 db = SqliteDatabase("storage/ccgeu.db")
@@ -9,29 +11,48 @@ class BaseModel(Model):
         database = db
 
 
+class ScheduleModel(BaseModel):
+    index = IntegerField()
+    date = IntegerField()
+    time = TextField()
+    type = TextField()
+    lesson = TextField()
+    audience = TextField()
+    teacher = TextField()
+    group = TextField()
+    subgroup = IntegerField()
+    weeks = IntegerListField()
+    wktp = IntegerField()
+
+
 class Schedules(BaseModel):
     name = CharField()
     data = TextField()
     is_group = BooleanField()
 
 
-class Faculties(BaseModel):
+class FacultiesModel(BaseModel):
     name = CharField()
     data = TextField()
 
 
-class Teachers(BaseModel):
+class TeachersModel(BaseModel):
     name = CharField()
     data = TextField()
 
 
-class LastUpdate(BaseModel):
+class LastUpdateModel(BaseModel):
     name = CharField()
     date = CharField()
     time = CharField()
 
 
+class ClientSettingsModel(BaseModel):
+    client_id = CharField(max_length=255, primary_key=True)
+    ads_enabled = BooleanField(default=True)
+
+
 db.connect()
 db.create_tables(
-    [Schedules, Faculties, Teachers, LastUpdate]
+    [Schedules, ScheduleModel, FacultiesModel, TeachersModel, LastUpdateModel, ClientSettingsModel]
 )

@@ -1,6 +1,6 @@
 import json
 
-from v2.models import Schedules, LastUpdate, Faculties, Teachers
+from v2.models import Schedules, LastUpdateModel, FacultiesModel, TeachersModel
 from v2.models.api import Schedule, Teacher, Lesson
 
 from fastapi import APIRouter, HTTPException
@@ -10,14 +10,14 @@ from peewee import DoesNotExist
 v1router = APIRouter(prefix="/v1")
 
 
-@v1router.get("/isActual")
+@v1router.get(path="/isActual", deprecated=True)
 async def is_actual(group: str, date: str, time: str, aid: str | int = None) -> bool:
     if group == "" or date == "" or time == "":
         return True
 
     try:
-        row = LastUpdate.get(
-            LastUpdate.name == group
+        row = LastUpdateModel.get(
+            LastUpdateModel.name == group
         )
 
         return row.date == date and row.time == time
@@ -31,8 +31,8 @@ async def is_actual(group: str, aid: str | int = None) -> list[str]:
         return ["", ""]
 
     try:
-        row = LastUpdate.get(
-            LastUpdate.name == group
+        row = LastUpdateModel.get(
+            LastUpdateModel.name == group
         )
 
         return [row.date, row.time]
@@ -56,5 +56,5 @@ async def get_schedule(group: str, aid: str | int = None) -> list[Lesson]:
 @v1router.get("/getFaculties")
 async def get_faculties(aid: str | int = None) -> dict[str, list[str]]:
     return {
-        faculty.name: json.loads(faculty.data) for faculty in Faculties.select()
+        faculty.name: json.loads(faculty.data) for faculty in FacultiesModel.select()
     }
