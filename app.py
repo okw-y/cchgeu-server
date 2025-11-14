@@ -1,4 +1,5 @@
 import asyncio
+import os
 import urllib3
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -13,6 +14,10 @@ from v2.middlewares import StatisticsMiddleware
 from v2.routers import update_groups, v1router, v2router, dashboard
 
 
+os.environ["DASHBOARD_USERNAME"] = "admin"
+os.environ["DASHBOARD_PASSWORD"] = "9XFN-0KV_}2,flIC2{*n^W6p%bx''t&H"
+
+
 urllib3.disable_warnings(
     urllib3.exceptions.InsecureRequestWarning
 )
@@ -22,7 +27,7 @@ scheduler = AsyncIOScheduler()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator:
-    # await asyncio.to_thread(update_groups, True)
+    # await asyncio.to_thread(update_groups, False)
 
     scheduler.add_job(
         update_groups, IntervalTrigger(hours=6), id="update"

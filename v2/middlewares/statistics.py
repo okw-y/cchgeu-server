@@ -1,5 +1,6 @@
 import json
 import time
+import traceback
 
 from v2.models import RequestLog
 
@@ -31,7 +32,9 @@ class StatisticsMiddleware(BaseHTTPMiddleware):
             response = await call_next(scoped_request)
             status_code = response.status_code
         except Exception as error:
-            error_message = str(error)
+            error_message = "".join(
+                traceback.format_tb(error.__traceback__)
+            )
             response = Response("Internal Server Error", status_code=500)
 
         latency_ms = int((time.time() - start_time) * 1000)

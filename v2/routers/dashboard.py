@@ -1,20 +1,26 @@
-import datetime
 import json
 import os
 import secrets
-from collections import defaultdict
 
-from starlette.responses import JSONResponse, HTMLResponse
-
-from v2.models import RequestLog, FacultiesModel
-
+from starlette.responses import HTMLResponse
 from fastapi import HTTPException, Depends, APIRouter
 from fastapi.security import HTTPBasicCredentials, HTTPBasic
 
-from peewee import fn, SQL
+from peewee import fn
+from v2.models import RequestLog, FacultiesModel, ClientSettingsModel
+
 
 security = HTTPBasic()
 dashboard = APIRouter()
+
+
+def safe_json_loads(json_string: str, default_value=None):
+    if default_value is None:
+        default_value = {}
+    try:
+        return json.loads(json_string.replace("'", "\""))
+    except (json.JSONDecodeError, TypeError):
+        return default_value if isinstance(default_value, dict) else json_string
 
 
 def protect_dashboard(credentials: HTTPBasicCredentials = Depends(security)) -> bool:
@@ -33,136 +39,85 @@ def protect_dashboard(credentials: HTTPBasicCredentials = Depends(security)) -> 
 
 
 @dashboard.get("/dashboard-data")
-def get_dashboard_data(period: str = "day", protected: bool = Depends(protect_dashboard)):  # noqa
-    # period
-    now = datetime.datetime.now()
-    if period == "week":
-        start_date = now - datetime.timedelta(days=7)
-    elif period == "month":
-        start_date = now - datetime.timedelta(days=30)
-    elif period == "all":
-        start_date = RequestLog.select(
-            fn.MIN(RequestLog.timestamp)
-        ).scalar() or now
-    else:
-        start_date = now - datetime.timedelta(days=1)
-
-    base_query = RequestLog.select().where(
-        RequestLog.timestamp >= start_date
-    )
-
-    # KPIs
-    total = base_query.count()
-    errors = base_query.where(RequestLog.status_code >= 400).count()
-    avg_latency = RequestLog.select(fn.AVG(RequestLog.latency_ms)).where(
-        RequestLog.timestamp >= start_date
-    ).scalar() or 0
-
-    # timeline
-    timeline_labels = []
-    timeline_data = []
-
-    if period == "day":
-        time_group_format = "%Y-%m-%d %H:00"
-    elif period == "all" and (now - start_date).days > 60:
-        time_group_format = "%Y-%m"
-    else:
-        time_group_format = "%Y-%m-%d"
-
-    strftime_func = fn.strftime(time_group_format, RequestLog.timestamp)
-    timeline_query = (
-        RequestLog.select(
-            strftime_func.alias("time_group"),
-            fn.COUNT(RequestLog.id).alias('count')
-        )
-        .where(RequestLog.timestamp >= start_date)
-        .group_by(SQL("time_group"))
-        .order_by(SQL("time_group"))
-        .dicts()
-    )
-
-    for row in timeline_query:
-        timeline_labels.append(row["time_group"])
-        timeline_data.append(row["count"])
-
-    # status codes
-    status_dist = {
-        "2xx (success)": base_query.where(RequestLog.status_code.between(200, 299)).count(),
-        "4xx (client error)": base_query.where(RequestLog.status_code.between(400, 499)).count(),
-        "5xx (server error)": base_query.where(RequestLog.status_code.between(500, 599)).count()
-    }
-
-    # faculties & groups
-    group_counts = defaultdict(int)
-    faculty_counts = defaultdict(int)
-
+def get_dashboard_data_v2(protected: bool = Depends(protect_dashboard)):  # noqa
     faculty_map = {}
-    for faculty in FacultiesModel.select().execute():
-        for group in json.loads(faculty.data.replace("'", "\"")):
-            faculty_map[group] = faculty.name
-
-    # subquery = (
-    #     RequestLog.select(RequestLog.client_id, fn.MAX(RequestLog.id).alias('max_id'))
-    #     .where(
-    #         (RequestLog.timestamp >= start_date) &
-    #         (RequestLog.client_id.is_null(False)) &
-    #         (RequestLog.path.in_(["/v2/getSchedule", "/v2/getTeachers"]))
-    #     )
-    #     .group_by(RequestLog.client_id).alias("t2")
-    # )
-
-    # query = (
-    #     RequestLog.select(RequestLog.params)
-    #     .alias("t1")
-    #     .join(subquery, on=(SQL("t1.id") == subquery.c.max_id))
-    # )
-
-    query = base_query.where(
-        RequestLog.client_id.is_null(False)
-    )
-    for log in query.execute():
+    for faculty in FacultiesModel.select():
         try:
-            params = json.loads(log.params)
-            group = params.get("group")
-            if group:
-                group_counts[group] += 1
-                if group in faculty_map:
-                    faculty_counts[faculty_map[group]] += 1
-        except (json.JSONDecodeError, AttributeError):
+            groups = json.loads(faculty.data.replace("'", "\""))
+            for group in groups:
+                faculty_map[group] = faculty.name
+        except:
             continue
 
-    # live log
-    logs = []
-    for log in RequestLog.select().order_by(RequestLog.id.desc()).limit(100):
-        logs.append({
+    requests_data = []
+    user_groups = {}
+
+    all_logs = RequestLog.select().order_by(RequestLog.timestamp.desc())
+
+    for log in all_logs.iterator():
+        params = {}
+        try:
+            params = json.loads(log.params.replace("'", "\""))
+        except:
+            pass
+
+        group = params.get("group", "")
+        client_id = log.client_id
+
+        requests_data.append({
             "id": log.id,
-            "time": log.timestamp.strftime('%H:%M:%S'),
+            "timestamp": log.timestamp.isoformat(),
             "method": log.method,
             "path": log.path,
             "status": log.status_code,
-            "latency": log.latency_ms,
-            "details": {
-                "headers": json.loads(log.headers),
-                "body": json.loads(log.body) if log.body and log.body.startswith('{') else log.body,
-                "error": log.error_message
-            }
+            "responseTime": log.latency_ms,
+            "ip": log.client_host,
+            "faculty": faculty_map.get(group, "Unknown"),
+            "group": group,
+            "headers": log.headers,
+            "body": log.body,
+            "error": log.error_message if log.status_code >= 500 else None
         })
 
-    return JSONResponse({
-        "summary": {
-            "total": total,
-            "avg_latency": round(avg_latency),
-            "error_rate": round(errors / total * 100, 2) if total else 0
-        },
-        "timeline": {
-            "labels": timeline_labels,
-            "data": timeline_data
-        },
-        "status_dist": status_dist,
-        "faculties": dict(faculty_counts),
-        "groups": dict(group_counts),
-        "logs": logs
-    })
+        if client_id and client_id not in user_groups:
+            if group and "-" in group:
+                user_groups[client_id] = {
+                    "group": group,
+                    "faculty": faculty_map.get(group, "Unknown")
+                }
+
+    ads_settings = ClientSettingsModel.select(
+        ClientSettingsModel.client_id, ClientSettingsModel.ads_enabled
+    )
+    ads_map = {s.client_id: s.ads_enabled for s in ads_settings}
+
+    first_requests = (
+        RequestLog.select(
+            RequestLog.client_id,
+            fn.MIN(RequestLog.timestamp).alias('join_date')
+        )
+        .where(RequestLog.client_id.is_null(False))
+        .group_by(RequestLog.client_id)
+    )
+
+    users_data = []
+    for row in first_requests:
+        cid = row.client_id
+        grp_info = user_groups.get(cid, {})
+
+        users_data.append({
+            "client_id": cid,
+            "username": f"user_{cid}",
+            "ad_enabled": ads_map.get(cid, False),
+            "join_date": row.join_date.isoformat(),
+            "group": grp_info.get("group"),
+            "faculty": grp_info.get("faculty")
+        })
+
+    return {
+        "requests": requests_data,
+        "users": users_data
+    }
 
 
 @dashboard.get("/dashboard", response_class=HTMLResponse)

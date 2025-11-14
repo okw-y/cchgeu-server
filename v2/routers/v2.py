@@ -63,14 +63,14 @@ async def get_schedule(group: str) -> Schedule:
 @v2router.get("/getFaculties")
 async def get_faculties() -> dict[str, list[str]]:
     return {
-        faculty.name: json.loads(faculty.data) for faculty in FacultiesModel.select()
+        faculty.name: json.loads(faculty.data.replace("'", "\"")) for faculty in FacultiesModel.select()
     }
 
 
 @v2router.get("/getAllGroups")
-async def get_faculties() -> list[str]:
+async def get_all_groups() -> list[str]:
     return list(
-        set(obj.grop for obj in ScheduleModel.select(ScheduleModel.group))
+        set(obj.group for obj in ScheduleModel.select(ScheduleModel.group))
     )
 
 
@@ -118,11 +118,31 @@ async def get_teachers(group: str = None, index: int = 0, limit: int = 20) -> di
     return output
 
 
+@v2router.get("/getTeacherInfo")
+async def get_teacher_info(teacher: str) -> Teacher:
+    if row := TeachersModel.get_or_none(TeachersModel.name == teacher):
+        return Teacher(**json.loads(row.data.replace("'", "\"")))
+    else:
+        raise HTTPException(
+            status_code=400, detail="Teacher is not exists!"
+        )
+
+
 @v2router.get("/adsEnabled")
 async def ads_enabled(request: Request) -> bool:
-    status = ClientSettingsModel.get_or_none(
-        ClientSettingsModel.client_id == (request.headers.get("client-id") or "*")
-    )
+    status = None
+
+    client_id = request.headers.get("client-id")
+    if client_id:
+        status = ClientSettingsModel.get_or_none(
+            ClientSettingsModel.client_id == client_id
+        )
+
+    if not status:
+        status = ClientSettingsModel.get_or_none(
+            ClientSettingsModel.client_id == "*"
+        )
+
     if status:
         return status.ads_enabled
 
